@@ -28,6 +28,9 @@ top = '../'
 out = 'build_dpdk'
 march = os.uname()[4]
 
+s = os.environ.get("TREX_MARCH");
+if s != None:
+  march = s
 
 b_path ="./build/linux_dpdk/"
 
@@ -307,6 +310,7 @@ def configure(conf):
           
 
 def configure_gcc (conf, explicit_path = None):
+
     # use the system path
     if explicit_path is None:
         conf.load('gcc')
@@ -323,7 +327,6 @@ def configure_gcc (conf, explicit_path = None):
         conf.load('g++')
     finally:
         conf.environ['PATH'] = saved 
-
 
 
 def configure_sanitized (conf, with_sanitized):
@@ -879,7 +882,7 @@ mlx4_dpdk_src = SrcGroup(dir='src/dpdk/drivers/net/mlx4',
                  'mlx4_utils.c',
             ]);
 
-if march == 'x86_64':
+if march == 'x86_64' or march == 'x86':
     bp_dpdk = SrcGroups([
                   dpdk_src,
                   dpdk_src_x86_64
@@ -963,8 +966,10 @@ common_flags = ['-DWIN_UCODE_SIM',
                 #'-D__TREX_RPC_DEBUG__', # debug RPC dialogue
                ]
 
+if march == 'x86':
+    common_flags = common_flags + ['-DRTE_ARCH_I686']
 
-if march == 'x86_64':
+if march == 'x86_64' or march == 'x86':
     common_flags_new = common_flags + [
                     '-march=native',
                     '-mssse3', '-msse4.1', '-mpclmul', 
@@ -1085,7 +1090,7 @@ dpdk_includes_path =''' ../src/
                     ''';
 
 # Include arch specific folder before generic folders
-if march == 'x86_64':
+if march == 'x86_64' or march == 'x86':
     dpdk_includes_path = dpdk_includes_path_x86_64 + dpdk_includes_path
 elif march == 'aarch64':
     dpdk_includes_path = dpdk_includes_path_aarch64 + dpdk_includes_path
@@ -1111,11 +1116,14 @@ includes_path = '''
 
 bpf_includes_path = '../external_libs/bpf ../external_libs/bpf/bpfjit'
 
-
-if march != 'aarch64':
+if march == 'x86_64':
     DPDK_FLAGS=['-D_GNU_SOURCE', '-DPF_DRIVER', '-DX722_SUPPORT', '-DX722_A0_SUPPORT', '-DVF_DRIVER', '-DINTEGRATED_VF', '-include', '../src/pal/linux_dpdk/dpdk1808_x86_64/rte_config.h'];
-else:
+elif march == 'x86':
+    DPDK_FLAGS=['-D_GNU_SOURCE', '-DPF_DRIVER', '-DX722_SUPPORT', '-DX722_A0_SUPPORT', '-DVF_DRIVER', '-DINTEGRATED_VF', '-include', '../src/pal/linux_dpdk/dpdk1808_x86/rte_config.h'];
+elif march == 'aarch64':
     DPDK_FLAGS=['-D_GNU_SOURCE', '-DPF_DRIVER', '-DVF_DRIVER', '-DINTEGRATED_VF', '-DRTE_FORCE_INTRINSICS', '-include', '../src/pal/linux_dpdk/dpdk1808_aarch64/rte_config.h'];
+else:
+    raise Exception("invalid march");
 
 client_external_libs = [
         'simple_enum',
@@ -1353,6 +1361,11 @@ def build_prog (bld, build_obj):
     cflags    = build_obj.get_c_flags(bld.env.SANITIZED)
     cxxflags  = build_obj.get_cxx_flags(bld.env.SANITIZED)
     linkflags = build_obj.get_link_flags(bld.env.SANITIZED)
+
+    if march == 'x86':
+      linkflags = linkflags + ["-m32"]
+      cxxflags = cxxflags + ["-m32"]
+      cflags = cflags + ["-m32"]
     
     bld.objects(
       features='c ',
@@ -1413,6 +1426,7 @@ def build_prog (bld, build_obj):
     bld.shlib(features = 'c',
               includes = bpf_includes_path,
               cflags   = cflags + ['-DSLJIT_CONFIG_AUTO=1','-DINET6'],
+              linkflags = linkflags,
               source   = bpf.file_list(top),
               target   = build_obj.get_bpf_target())
 
@@ -1423,6 +1437,7 @@ def build_prog (bld, build_obj):
     bld.program(features='cxx cxxprogram',
                 includes =inc_path,
                 cxxflags = ( cxxflags + ['-std=gnu++11',]),
+                cflags = cflags ,
                 linkflags = linkflags ,
                 lib=['pthread','dl', 'z'],
                 use =[build_obj.get_dpdk_target(), build_obj.get_bpf_target(), 'zmq'],

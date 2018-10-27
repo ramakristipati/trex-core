@@ -21,6 +21,8 @@ limitations under the License.
 
 #if defined(__x86_64__) || defined(__aarch64__)
  // supported 
+#elif defined(__i386__)
+ // supported
 #else
     #error("NOT supported platform");
 #endif

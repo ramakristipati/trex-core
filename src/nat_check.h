@@ -175,6 +175,9 @@ struct CGenNodeLatencyPktInfo : public CGenNodeMsgBase {
 
     uint32_t      m_pad4[MAX_PKT_MSG_INFO];
     uint64_t      m_pad5[8];
+#ifdef __i386__
+    uint8_t       m_pad6[4];
+#endif
 };
 
 

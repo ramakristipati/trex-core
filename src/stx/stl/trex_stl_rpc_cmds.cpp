@@ -340,7 +340,7 @@ TrexRpcCmdAddStream::_run(const Json::Value &params, Json::Value &result) {
 
         /* fetch the packet from the message */
 
-        stream->m_pkt.len    = std::max(pkt_binary.size(), 60UL);
+        stream->m_pkt.len    = std::max((unsigned long)pkt_binary.size(), 60UL);
 
         /* allocate and init to zero ( with () ) */
         stream->m_pkt.binary = new uint8_t[stream->m_pkt.len]();
