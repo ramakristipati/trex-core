@@ -26,11 +26,6 @@ Build.CACHE_SUFFIX = '_%s_cache.py' % platform.node()
 # these variables are mandatory ('/' are converted automatically)
 top = '../'
 out = 'build_dpdk'
-march = os.uname()[4]
-
-s = os.environ.get("TREX_MARCH");
-if s != None:
-  march = s
 
 b_path ="./build/linux_dpdk/"
 
@@ -49,6 +44,16 @@ SANITIZE_CC_VERSION = "4.9.0"
 GCC6_DIR = '/usr/local/gcc-6.2/bin'
 GCC7_DIR = '/usr/local/gcc-7.2/bin'
 
+def getarch():
+  classes = {
+    'i386': 'x86',
+    'i586': 'x86',
+    'i686': 'x86',
+    'ppc': 'powerpc',
+  }
+
+  arch = platform.machine()
+  return classes.get(arch, arch)
 
 #######################################
 # utility for group source code
@@ -117,10 +122,12 @@ class SrcGroups:
 def options(opt):
     opt.load('compiler_cxx')
     opt.load('compiler_c')
+    opt.add_option('--march', dest='march', default=getarch(), action='store')
+    opt.add_option('--cross', default='', help='Cross compiler prefix, e.g. aarch64-linux-gnu-')
     opt.add_option('--pkg-dir', '--pkg_dir', dest='pkg_dir', default=False, action='store', help="Destination folder for 'pkg' option.")
     opt.add_option('--pkg-file', '--pkg_file', dest='pkg_file', default=False, action='store', help="Destination filename for 'pkg' option.")
     opt.add_option('--publish-commit', '--publish_commit', dest='publish_commit', default=False, action='store', help="Specify commit id for 'publish_both' option (Please make sure it's good!)")
-    opt.add_option('--no-mlx', dest='no_mlx', default=(True if march == 'aarch64' else False), action='store', help="don't use mlx5 dpdk driver. use with ./b configure --no-mlx. no need to run build with it")
+    opt.add_option('--no-mlx', dest='no_mlx', default=False, action='store', help="don't use mlx5 dpdk driver. use with ./b configure --no-mlx. no need to run build with it")
     opt.add_option('--with-ntacc', dest='with_ntacc', default=False, action='store_true', help="Use Napatech dpdk driver. Use with ./b configure --with-ntacc.")
     opt.add_option('--no-ver', action = 'store_true', help = "Don't update version file.")
     opt.add_option('--private', dest='private', action = 'store_true', help = "private publish, do not replace latest/be_latest image with this image")
@@ -270,13 +277,20 @@ def configure(conf):
     if conf.options.gcc6 and conf.options.gcc7:
         conf.fatal('--gcc6 and --gcc7 and mutual exclusive')
 
+    # init using cross
+    conf.env.march = conf.options.march
+    conf.env.CROSS = conf.options.cross
+    conf.env.CC = conf.env.CROSS + "gcc"
+    conf.env.AR = conf.env.CROSS + "ar"
+    conf.env.LINK_CC = conf.env.CC
+    conf.env.CXX = conf.env.CROSS + "g++"
+
     if conf.options.gcc6:
         configure_gcc(conf, GCC6_DIR)
     elif conf.options.gcc7:
         configure_gcc(conf, GCC7_DIR)
     else:
         configure_gcc(conf)
-
 
     conf.find_program('ldd')
     conf.check_cxx(lib = 'z', errmsg = missing_pkg_msg(fedora = 'zlib-devel', ubuntu = 'zlib1g-dev'))
@@ -285,7 +299,7 @@ def configure(conf):
     with_sanitized  = conf.options.sanitized
     
     configure_sanitized(conf, with_sanitized)
-            
+
     conf.env.NO_MLX = no_mlx
     if not no_mlx:
         ofed_ok = conf.check_ofed(mandatory = False)
@@ -882,7 +896,9 @@ mlx4_dpdk_src = SrcGroup(dir='src/dpdk/drivers/net/mlx4',
                  'mlx4_utils.c',
             ]);
 
-if march == 'x86_64' or march == 'x86':
+def build_bp_dpdk_and_bpf_groups():
+  global bp_dpdk, bpf
+  if march == 'x86_64' or march == 'x86':
     bp_dpdk = SrcGroups([
                   dpdk_src,
                   dpdk_src_x86_64
@@ -894,7 +910,7 @@ if march == 'x86_64' or march == 'x86':
                 bpfjit_src]);
 
 
-elif march == 'aarch64':
+  elif march == 'aarch64':
     bp_dpdk = SrcGroups([
                   dpdk_src,
                   dpdk_src_aarch64
@@ -947,9 +963,10 @@ l2fwd_main_src = SrcGroup(dir='src',
 l2fwd =SrcGroups([
                 l2fwd_main_src]);
 
-
-# common flags for both new and old configurations
-common_flags = ['-DWIN_UCODE_SIM',
+def build_common_flags():
+  global common_flags_new, common_flags_old
+  # common flags for both new and old configurations
+  common_flags = ['-DWIN_UCODE_SIM',
                 '-D_BYTE_ORDER',
                 '-D_LITTLE_ENDIAN',
                 '-DLINUX',
@@ -966,10 +983,10 @@ common_flags = ['-DWIN_UCODE_SIM',
                 #'-D__TREX_RPC_DEBUG__', # debug RPC dialogue
                ]
 
-if march == 'x86':
+  if march == 'x86':
     common_flags = common_flags + ['-DRTE_ARCH_I686']
 
-if march == 'x86_64' or march == 'x86':
+  if march == 'x86_64' or march == 'x86':
     common_flags_new = common_flags + [
                     '-march=native',
                     '-mssse3', '-msse4.1', '-mpclmul', 
@@ -995,10 +1012,10 @@ if march == 'x86_64' or march == 'x86':
                       '-DTREX_USE_BPFJIT',
                       ];
 
-elif march == 'aarch64':
+  elif march == 'aarch64':
     common_flags_new = common_flags + [
-                       '-march=native',
-                       '-mtune=cortex-a72',
+                       #'-march=native',
+                       #'-mtune=cortex-a72',
                        '-DRTE_ARCH_64',
                        '-DRTE_FORCE_INTRINSICS',
                        '-DRTE_MACHINE_NEON',
@@ -1011,8 +1028,8 @@ elif march == 'aarch64':
                        '-DRTE_COMPILE_TIME_CPUFLAGS=RTE_CPUFLAG_EVTSTRM,RTE_CPUFLAG_NEON,RTE_CPUFLAG_CRC32,RTE_CPUFLAG_AES,RTE_CPUFLAG_PMULL,RTE_CPUFLAG_SHA1,RTE_CPUFLAG_SHA2',
                        ]
     common_flags_old = common_flags + [
-                       '-march=native',
-                       '-mtune=cortex-a53',
+                       #'-march=native',
+                       #'-mtune=cortex-a53',
                        '-DRTE_ARCH_64',
                        '-DRTE_FORCE_INTRINSICS',
                        '-DRTE_MACHINE_NEON',
@@ -1023,17 +1040,20 @@ elif march == 'aarch64':
                        '-DRTE_MACHINE_SHA2',
                        '-DRTE_COMPILE_TIME_CPUFLAGS=RTE_CPUFLAG_NEON,RTE_CPUFLAG_CRC32,RTE_CPUFLAG_AES,RTE_CPUFLAG_PMULL,RTE_CPUFLAG_SHA1,RTE_CPUFLAG_SHA2',
                        ]
+  else:
+    raise Exception("invalid march: " + march);
 
-
-dpdk_includes_path_x86_64 ='''
+def build_dpdk_includes_path():
+  global dpdk_includes_path, DPDK_FLAGS, bpf_includes_path, includes_path
+  dpdk_includes_path_x86_64 ='''
                         ../src/dpdk/lib/librte_eal/common/include/arch/x86
                        '''
 
-dpdk_includes_path_aarch64 ='''
+  dpdk_includes_path_aarch64 ='''
                         ../src/dpdk/lib/librte_eal/common/include/arch/arm
                        '''
 
-dpdk_includes_path =''' ../src/
+  dpdk_includes_path =''' ../src/
                         ../src/pal/linux_dpdk/
                         ../src/pal/linux_dpdk/dpdk1808_'''+ march +'''/
                         ../src/dpdk/drivers/
@@ -1089,14 +1109,14 @@ dpdk_includes_path =''' ../src/
                         ../src/dpdk/drivers/bus/pci/linux/
                     ''';
 
-# Include arch specific folder before generic folders
-if march == 'x86_64' or march == 'x86':
-    dpdk_includes_path = dpdk_includes_path_x86_64 + dpdk_includes_path
-elif march == 'aarch64':
-    dpdk_includes_path = dpdk_includes_path_aarch64 + dpdk_includes_path
+  # Include arch specific folder before generic folders
+  if march == 'x86_64' or march == 'x86':
+      dpdk_includes_path = dpdk_includes_path_x86_64 + dpdk_includes_path
+  elif march == 'aarch64':
+      dpdk_includes_path = dpdk_includes_path_aarch64 + dpdk_includes_path
 
 
-includes_path = '''
+  includes_path = '''
                    ../src/
                    ../src/drivers/
                    ../src/pal/common/
@@ -1114,15 +1134,15 @@ includes_path = '''
 
 
 
-bpf_includes_path = '../external_libs/bpf ../external_libs/bpf/bpfjit'
+  bpf_includes_path = '../external_libs/bpf ../external_libs/bpf/bpfjit'
 
-if march == 'x86_64':
+  if march == 'x86_64':
     DPDK_FLAGS=['-D_GNU_SOURCE', '-DPF_DRIVER', '-DX722_SUPPORT', '-DX722_A0_SUPPORT', '-DVF_DRIVER', '-DINTEGRATED_VF', '-include', '../src/pal/linux_dpdk/dpdk1808_x86_64/rte_config.h'];
-elif march == 'x86':
+  elif march == 'x86':
     DPDK_FLAGS=['-D_GNU_SOURCE', '-DPF_DRIVER', '-DX722_SUPPORT', '-DX722_A0_SUPPORT', '-DVF_DRIVER', '-DINTEGRATED_VF', '-include', '../src/pal/linux_dpdk/dpdk1808_x86/rte_config.h'];
-elif march == 'aarch64':
+  elif march == 'aarch64':
     DPDK_FLAGS=['-D_GNU_SOURCE', '-DPF_DRIVER', '-DVF_DRIVER', '-DINTEGRATED_VF', '-DRTE_FORCE_INTRINSICS', '-include', '../src/pal/linux_dpdk/dpdk1808_aarch64/rte_config.h'];
-else:
+  else:
     raise Exception("invalid march");
 
 client_external_libs = [
@@ -1149,7 +1169,7 @@ PLATFORM_aarch64 = "aarch64"
 
 class build_option:
 
-    def __init__(self,debug_mode,is_pie):
+    def __init__(self,debug_mode,is_pie, march):
       self.mode     = debug_mode;   ##debug,release
       self.platform = march  # aarch64 or x86_64
       self.is_pie = is_pie
@@ -1270,6 +1290,8 @@ class build_option:
         return (flags)
 
     def get_common_flags (self):
+        global common_flags_new, common_flags_old
+        build_common_flags()
         if self.isPIE():
             flags = copy.copy(common_flags_old)
         else:
@@ -1335,12 +1357,13 @@ class build_option:
 
 
 
-build_types = [
-               build_option(debug_mode= DEBUG_, is_pie = False),
-               build_option(debug_mode= RELEASE_, is_pie = False),
-               build_option(debug_mode= DEBUG_, is_pie = True),
-               build_option(debug_mode= RELEASE_, is_pie = True),
-              ]
+def get_build_types():
+  return [
+             build_option(debug_mode= DEBUG_, is_pie = False, march=march),
+             build_option(debug_mode= RELEASE_, is_pie = False, march=march),
+             build_option(debug_mode= DEBUG_, is_pie = True, march=march),
+             build_option(debug_mode= RELEASE_, is_pie = True, march=march),
+         ]
 
 
 def build_prog (bld, build_obj):
@@ -1366,7 +1389,7 @@ def build_prog (bld, build_obj):
       linkflags = linkflags + ["-m32"]
       cxxflags = cxxflags + ["-m32"]
       cflags = cflags + ["-m32"]
-    
+
     bld.objects(
       features='c ',
       includes = dpdk_includes_path,
@@ -1455,7 +1478,7 @@ def post_build(bld):
 
     print("*** generating softlinks ***")
     exec_p ="../scripts/"
-    for obj in build_types:
+    for obj in get_build_types():
         install_single_system(bld, exec_p, obj);
 
 
@@ -1470,6 +1493,13 @@ def check_build_options(bld):
 
 
 def build(bld):
+
+    global march
+
+    march = bld.env.march
+    build_bp_dpdk_and_bpf_groups()
+    build_dpdk_includes_path()
+
     check_build_options(bld)
     if bld.env.SANITIZED and bld.cmd == 'build':
         Logs.warn("\n******* building sanitized binaries *******\n")
@@ -1479,7 +1509,7 @@ def build(bld):
     bld.add_post_fun(post_build);
 
     # ZMQ
-    zmq_lib_path='external_libs/zmq-' + march + '/'
+    zmq_lib_path='external_libs/zmq-' + bld.env.march + '/'
     bld.read_shlib( name='zmq' , paths=[top + zmq_lib_path] )
 
     if bld.env.NO_MLX == False:
@@ -1512,7 +1542,7 @@ def build(bld):
             bld.env.libmnl_path=' \n ../external_libs/libmnl/include/ \n'
             bld.env.mlx5_kw  = {}
 
-    for obj in build_types:
+    for obj in get_build_types():
         build_type(bld,obj);
 
 
@@ -1792,7 +1822,7 @@ def release(bld, custom_dir = None):
 
     # get build context to refer the build output dir
     bld=Build.Context.create_context('build')
-    for obj in build_types:
+    for obj in get_build_types():
         copy_single_system(bld,exec_p,obj)
         copy_single_system1(bld,exec_p,obj)
 

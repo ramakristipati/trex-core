@@ -509,4 +509,7 @@
 #define RTE_TOOLCHAIN_GCC 1
 #undef RTE_ARCH_ARM_TUNE
 #define RTE_ARCH_ARM_TUNE "cortex-a72"
+/* TREX specific */
+#define TREX_PATCH 1
+#define TREX_PATCH_LOW_LATENCY 1
 #endif /* __RTE_CONFIG_H */
