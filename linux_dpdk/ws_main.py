@@ -700,6 +700,9 @@ dpdk_src_x86_64 = SrcGroup(dir='src/dpdk/',
                  #af_packet
                  'drivers/net/af_packet/rte_eth_af_packet.c',
 
+                 #bpgen
+                 'drivers/net/bpgen/rte_eth_bpgen.c',
+
                  #Amazone ENA
                  'drivers/net/ena/ena_ethdev.c',
                  'drivers/net/ena/base/ena_com.c',
@@ -1059,6 +1062,7 @@ def build_dpdk_includes_path():
                         ../src/dpdk/drivers/
                         ../src/dpdk/drivers/net/
                         ../src/dpdk/drivers/net/af_packet/
+                        ../src/dpdk/drivers/net/bpgen/
                         ../src/dpdk/drivers/net/e1000/
                         ../src/dpdk/drivers/net/e1000/base/
                         ../src/dpdk/drivers/net/enic/
