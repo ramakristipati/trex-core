@@ -9,12 +9,16 @@ class ASTFResilience_Test(CASTFGeneral_Test):
     """Checking stability of ASTF in non-usual conditions """
     def setUp(self):
         CASTFGeneral_Test.setUp(self)
-        self.astf_trex.acquire()
-
+        self.weak = self.is_VM
+        setup = CTRexScenario.setup_name
+        if setup in ['trex11', 'trex16']:
+            self.skip('not enough memory for this test')
 
     def ip_gen(self, client_base, server_base, client_ips, server_ips):
-        ip_gen_c = ASTFIPGenDist(ip_range = [client_base, int2ip(ip2int(client_base) + client_ips)])
-        ip_gen_s = ASTFIPGenDist(ip_range = [server_base, int2ip(ip2int(server_base) + server_ips)])
+        assert client_ips>0
+        assert server_ips>0
+        ip_gen_c = ASTFIPGenDist(ip_range = [client_base, int2ip(ip2int(client_base) + client_ips - 1)])
+        ip_gen_s = ASTFIPGenDist(ip_range = [server_base, int2ip(ip2int(server_base) + server_ips - 1)])
         return ASTFIPGen(dist_client = ip_gen_c,
                          dist_server = ip_gen_s)
 
@@ -47,12 +51,15 @@ class ASTFResilience_Test(CASTFGeneral_Test):
 
         return ASTFProfile(default_ip_gen = ip_gen, templates = templates_arr)
 
-    def test_astf_params(self):
+    def test_astf_prof_params(self):
         print('')
 
-        for client_ips in (1, 1<<8, 1<<16):
-            for server_ips in (1, 1<<8, 1<<16):
+        for client_ips in (1<<8, 1<<16):
+            for server_ips in (1<<8, 1<<16):
                 for templates in (1, 1<<8, 1<<12):
+                    if self.weak and templates > 1<<8:
+                        continue
+
                     params = {
                         'client_ips': client_ips,
                         'server_ips': server_ips,

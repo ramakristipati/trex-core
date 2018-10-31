@@ -20,12 +20,15 @@ class CAstfTrafficStats(object):
         data = rc.data()['data']
         self._desc = [0] * len(data)
         self._ref = {'epoch': -1}
+        self._err_desc = {}
         for section in self.sections:
             self._ref[section] = [0] * len(data)
         self._max_desc_name_len = 0
         for item in data:
             self._desc[item['id']] = item
             self._max_desc_name_len = max(self._max_desc_name_len, len(item['name']))
+            if item['info'] == 'error':
+                self._err_desc[item['name']] = item
         self.is_init = True
 
     def _get_stats_values(self, relative = True):
@@ -48,11 +51,27 @@ class CAstfTrafficStats(object):
             data[section] = section_list
         return data
 
-    def get_stats(self):
+
+    def is_traffic_stats_error(self, stats):
+        data = {}
+        errs = False
+
+        for section in self.sections:
+            s = stats[section]
+            data[section] = {}
+            for k, v in self._err_desc.items():
+                if s.get(k, 0):
+                    data[section][k] = v['help']
+                    errs = True
+
+        return (errs, data)
+
+
+    def get_stats(self,skip_zero = True):
         vals = self._get_stats_values()
         data = {}
         for section in self.sections:
-            data[section] = dict([(k['name'], v) for k, v in zip(self._desc, vals[section]) if k['real']])
+            data[section] = dict([(k['name'], v) for k, v in zip(self._desc, vals[section]) if (((not skip_zero) or ((skip_zero and ((not k['zero']) and  (v>0))) or ( k['zero']))))  ])
         return data
 
     def clear_stats(self):

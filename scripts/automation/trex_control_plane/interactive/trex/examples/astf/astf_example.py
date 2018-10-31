@@ -6,8 +6,9 @@ from trex.astf.api import *
 from pprint import pprint
 import argparse
 import os
+import sys
 
-def astf_test(server, mult, duration, profile_path = None):
+def astf_test(server, mult, duration, profile_path):
 
     # create client
     c = ASTFClient(server = server)
@@ -23,7 +24,7 @@ def astf_test(server, mult, duration, profile_path = None):
 
         # load ASTF profile
         if not profile_path:
-            profile_path = os.path.join(astf_path.ASTF_PROFILES_PATH, 'http_simple.py')
+            profile_path = os.path.join(astf_path.get_profiles_path(), 'http_simple.py')
 
         c.load_profile(profile_path)
 
@@ -31,7 +32,7 @@ def astf_test(server, mult, duration, profile_path = None):
         c.clear_stats()
 
         print("Injecting with multiplier of '%s' for %s seconds" % (mult, duration))
-        c.start(mult = mult, duration = duration, nc = True)
+        c.start(mult = mult, duration = duration)
 
         # block until done
         c.wait_on_traffic()
@@ -40,27 +41,23 @@ def astf_test(server, mult, duration, profile_path = None):
         stats = c.get_stats()
 
         # use this for debug info on all the stats
-        #pprint(stats)
-
-        sent_pkts = stats['total']['ipackets']
-        recv_pkts = stats['total']['opackets']
+        pprint(stats)
 
         if c.get_warnings():
             print('\n\n*** test had warnings ****\n\n')
             for w in c.get_warnings():
                 print(w)
 
-        assert sent_pkts > 100, 'Too few packets sent (%s)' % sent_pkts
-        assert recv_pkts > sent_pkts * 0.99, 'Too much packets lost (sent: %s, recv: %s)' % (sent_pkts, recv_pkts)
 
-        client_stats = stats['astf']['client']
-        server_stats = stats['astf']['server']
+        client_stats = stats['traffic']['client']
+        server_stats = stats['traffic']['server']
 
-        client_sent, server_recv = client_stats['tcps_sndpack'], server_stats['tcps_rcvpack']
-        server_sent, client_recv = server_stats['tcps_sndpack'], client_stats['tcps_rcvpack']
+        client_sent, server_recv = client_stats['tcps_sndbyte'], server_stats['tcps_rcvbyte']
+        server_sent, client_recv = server_stats['tcps_sndbyte'], client_stats['tcps_rcvbyte']
 
-        assert client_sent * 0.9 < server_recv, 'Too much TCP drops - clients sent: %s, servers received: %s' % (client_sent, server_recv)
-        assert server_sent * 0.9 < client_recv, 'Too much TCP drops - servers sent: %s, clients received: %s' % (server_sent, client_recv)
+        assert (client_sent == server_recv), 'Too much TCP drops - clients sent: %s, servers received: %s' % (client_sent, server_recv)
+        assert (server_sent == client_recv), 'Too much TCP drops - servers sent: %s, clients received: %s' % (server_sent, client_recv)
+
 
     except TRexError as e:
         passed = False
@@ -77,6 +74,8 @@ def astf_test(server, mult, duration, profile_path = None):
         print('\nTest has passed :-)\n')
     else:
         print('\nTest has failed :-(\n')
+        sys.exit(1)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description = 'Example for TRex ASTF, sending http_simple.py')
@@ -101,6 +100,7 @@ def parse_args():
                         type = float)
 
     return parser.parse_args()
+
 
 args = parse_args()
 astf_test(args.server, args.mult, args.duration, args.file)

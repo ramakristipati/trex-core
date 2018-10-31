@@ -15,6 +15,8 @@ class CASTFGeneral_Test(CTRexGeneral_Test):
         # check basic requirements, should be verified at test_connectivity, here only skip test
         if CTRexScenario.astf_init_error:
             self.skip(CTRexScenario.astf_init_error)
+        if type(self.astf_trex) is ASTFClient:
+            self.astf_trex.reset()
 
     def connect(self, tries = 10):
         # need delay and check only because TRex process might be still starting
@@ -88,6 +90,10 @@ class CASTFGeneral_Test(CTRexGeneral_Test):
         setup['nic-ports'] = info['port_count']
         setup['nic-speed'] = str(self.astf_trex.get_port_info(0))
 
+    def get_driver_params(self):
+        c = CTRexScenario.astf_trex
+        driver = c.any_port.get_formatted_info()['driver']
+        return self.get_per_driver_params()[driver]
 
 class ASTFBasic_Test(CASTFGeneral_Test):
     # will run it first explicitly, check connectivity and configure routing
