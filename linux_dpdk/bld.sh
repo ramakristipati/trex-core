@@ -9,6 +9,12 @@ CONFIG_OPTS=
 
 # sudo apt-get install linux-libc-dev:i386
 
+if [ "$arch" = "x86_64" ]; then
+  export CC=gcc
+  export CXX=g++
+  CONFIG_OPTS="$CONFIG_OPTS --cross="
+fi
+
 if [ "$arch" = "aarch64" ]; then
   # sudo apt install g++-aarch64-linux-gnu
   # sudo apt install gcc-aarch64-linux-gnu
