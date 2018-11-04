@@ -290,8 +290,8 @@ class STLSim(object):
         print("executing command: '{0}'".format(" ".join(cmd)))
 
         if self.silent:
-            FNULL = open(os.devnull, 'wb')
-            rc = subprocess.call(cmd, stdout=FNULL)
+            with open(os.devnull, 'wb') as FNULL:
+                rc = subprocess.call(cmd, stdout=FNULL)
         else:
             rc = subprocess.call(cmd)
 
@@ -313,7 +313,7 @@ class STLSim(object):
 
 
         if not self.silent:
-            print("Mering cores output to a single pcap file...\n")
+            print("Merging cores output to a single pcap file...\n")
         inputs = ["{0}-{1}".format(self.outfile, index) for index in range(0, self.dp_core_count)]
         pcap.merge_cap_files(inputs, self.outfile, delete_src = True)
 

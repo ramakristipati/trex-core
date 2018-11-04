@@ -277,8 +277,14 @@ TrexStatelessPort::start_traffic(const TrexPortMultiplier &mul, double duration,
     int index = 0;
     for (auto core_id : m_cores_id_list) {
 
+        if ( !compiled_objs[index] ) {
+            m_dp_events.on_core_reporting_in(m_pending_async_stop_event, core_id);
+            index++;
+            continue;
+        }
+
         /* was the core assigned a compiled object ? */
-        if (compiled_objs[index]) {
+        if (!compiled_objs[index]->is_empty()) {
             TrexCpToDpMsgBase *start_msg = new TrexStatelessDpStart(m_port_id,
                                                                     m_pending_async_stop_event,
                                                                     compiled_objs[index],
@@ -286,7 +292,7 @@ TrexStatelessPort::start_traffic(const TrexPortMultiplier &mul, double duration,
                                                                     start_at_ts);
             send_message_to_dp(core_id, start_msg);
         } else {
-
+            delete compiled_objs[index];
             /* mimic an end event */
             m_dp_events.on_core_reporting_in(m_pending_async_stop_event, core_id);
         }

@@ -390,19 +390,17 @@ public:
     /* can this stream be split ? */
     bool is_splitable(uint8_t dp_core_count) const {
 
-        if (is_latency_stream()) {
+        if (is_latency_stream() || m_core_id_specified) {
             // because of sequence number, can't split streams with payload rule to different cores
             return false;
         }
 
-        /* cont stream is always splitable */
+        /* cont stream is splittable unless otherwise specified */
         if (m_type == stCONTINUOUS) {
             return true;
         }
 
-        int per_core_burst_total_pkts = (m_burst_total_pkts / dp_core_count);
-
-        return (per_core_burst_total_pkts > 0);
+        return (m_burst_total_pkts >= dp_core_count);
 
     }
 
@@ -466,6 +464,9 @@ public:
         dp->m_null_stream           =   m_null_stream;
 
         dp->m_rate                  =   m_rate;
+
+        dp->m_core_id_specified     = m_core_id_specified;
+        dp->m_core_id               = m_core_id;
 
         return(dp);
     }
@@ -550,11 +551,13 @@ public:
 
     double        m_isg_usec;
     int           m_next_stream_id;
+    uint8_t       m_core_id;
 
     /* indicators */
     bool          m_enabled;
     bool          m_self_start;
     bool          m_start_paused;
+    bool          m_core_id_specified;
 
     /* null stream (a dummy stream) */
     bool          m_null_stream;
